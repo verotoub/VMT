@@ -1,0 +1,566 @@
+<title>VMT Jewellery Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: phone-first catalogue. Sticky header with tabs by stage, photo grid, bottom-sheet detail, one add button. */
+:root{
+  --bg:#f3f4f1; --surface:#ffffff; --ink:#1b2224; --muted:#5f6a69; --line:#dfe2dd;
+  --accent:#1f5a4b; --accent-ink:#ffffff; --gold:#9a7a2e; --soft:#e7ece8;
+  --warn:#a5561b; --warn-bg:#fbeee2; --bad:#a3302b; --bad-bg:#f8e4e2; --ok:#2f6b3a; --ok-bg:#e3f0e4;
+  --display:"Marcellus", "Cormorant Garamond", Georgia, serif;
+  --body:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121617; --surface:#1b2122; --ink:#e9ece9; --muted:#9aa5a3; --line:#2c3536;
+  --accent:#6fb59f; --accent-ink:#0f1a17; --gold:#d6b25e; --soft:#222b2b;
+  --warn:#f0a868; --warn-bg:#3a2a1c; --bad:#f08a82; --bad-bg:#3b1f1d; --ok:#8fcf98; --ok-bg:#1d3121; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121617; --surface:#1b2122; --ink:#e9ece9; --muted:#9aa5a3; --line:#2c3536;
+  --accent:#6fb59f; --accent-ink:#0f1a17; --gold:#d6b25e; --soft:#222b2b;
+  --warn:#f0a868; --warn-bg:#3a2a1c; --bad:#f08a82; --bad-bg:#3b1f1d; --ok:#8fcf98; --ok-bg:#1d3121; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:0 96px}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 8px;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:400;font-size:26px;margin:0;letter-spacing:.01em;flex:1;min-width:0}
+h1 small{display:block;font-family:var(--body);font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+.iconbtn[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.search{margin-top:10px;width:100%;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 14px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:2px;scrollbar-width:none}
+.tab{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 13px;white-space:nowrap;font-size:14px}
+.tab b{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--muted);margin-left:4px}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.tab[aria-selected="true"] b{color:inherit;opacity:.8}
+
+.reminders{display:grid;gap:8px;margin-top:14px}
+.rem{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:var(--r);background:var(--warn-bg);color:var(--ink);border:0;text-align:left;width:100%}
+.rem.late{background:var(--bad-bg)}
+.rem .when{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--warn);white-space:nowrap}
+.rem.late .when{color:var(--bad)}
+.rem .what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.hint{color:var(--muted);font-size:13px;margin:14px 0 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;text-align:left;padding:0;display:flex;flex-direction:column}
+.ph{aspect-ratio:1/1;width:100%;max-width:100%;background:var(--soft);position:relative;display:grid;place-items:center;color:var(--muted);font-family:var(--display);font-size:13px}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.chip{position:absolute;left:8px;top:8px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--surface);color:var(--ink);letter-spacing:.02em}
+.chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.bad{background:var(--bad-bg);color:var(--bad)} .chip.ok{background:var(--ok-bg);color:var(--ok)}
+.meta{padding:9px 11px 11px;display:grid;gap:2px}
+.code{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em}
+.name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prices{display:flex;justify-content:space-between;gap:6px;align-items:baseline;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sale{color:var(--gold);font-weight:500}
+.cost{color:var(--muted);font-size:12px}
+
+.empty{margin-top:28px;padding:28px 20px;border:1px dashed var(--line);border-radius:var(--r);text-align:center;color:var(--muted)}
+.empty h2{font-family:var(--display);font-weight:400;color:var(--ink);font-size:20px;margin:0 0 6px}
+
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:14px 20px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:6}
+
+dialog{border:0;padding:0;background:var(--surface);color:var(--ink);width:min(560px,100%);max-height:92vh;border-radius:16px;overflow:auto}
+dialog::backdrop{background:rgba(10,14,15,.55)}
+@media (max-width:600px){dialog{margin:auto 0 0;max-width:100%;border-radius:16px 16px 0 0;max-height:94vh}}
+.sheet{padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));display:grid;gap:14px}
+.sheet h2{font-family:var(--display);font-weight:400;font-size:24px;margin:0;text-wrap:balance}
+.close{float:right;border:0;background:var(--soft);border-radius:999px;width:34px;height:34px;font-size:18px;line-height:1}
+.gallery{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory}
+.gallery img{width:100%;flex:0 0 100%;aspect-ratio:1/1;max-width:100%;object-fit:cover;border-radius:var(--r);scroll-snap-align:start;background:var(--soft)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
+.kv dt{color:var(--muted);font-size:13px}
+.kv dd{margin:0;font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere}
+.money{font-family:var(--mono)}
+.private{color:var(--muted);font-size:12px}
+.timeline{background:var(--soft);border-radius:var(--r);padding:12px}
+.bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 15px;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn[disabled]{opacity:.5;cursor:default}
+a.btn{text-decoration:none;color:inherit;display:inline-block}
+.preview{width:100%;max-width:100%;border-radius:var(--r);border:1px solid var(--line);display:block}
+.caption{width:100%;min-height:96px;border:1px solid var(--line);border-radius:var(--r);padding:10px;background:var(--bg);font-size:14px}
+.section-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+form.sheet label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+form.sheet input,form.sheet select,form.sheet textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 10px;font-size:15px;width:100%;min-width:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two > *{min-width:0}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{position:relative;width:76px;height:76px;border-radius:8px;overflow:hidden;background:var(--soft)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb button{position:absolute;right:3px;top:3px;border:0;border-radius:99px;width:22px;height:22px;background:var(--surface);font-size:13px;line-height:1}
+.addphoto{width:76px;height:76px;border:1px dashed var(--muted);border-radius:8px;display:grid;place-items:center;font-size:12px;color:var(--muted);text-align:center;cursor:pointer}
+.addphoto input{display:none}
+.note{font-size:12px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;z-index:20;max-width:calc(100% - 32px)}
+.banner{margin-top:14px;padding:12px;border-radius:var(--r);background:var(--soft);font-size:14px}
+@media (prefers-reduced-motion:no-preference){.card{transition:transform .15s}.card:active{transform:scale(.98)}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="top">
+      <h1><small>Jewellery book</small><span id="bizName">VMT</span></h1>
+      <button class="iconbtn" id="costToggle" aria-pressed="false" title="Show or hide cost prices on this phone">Costs hidden</button>
+      <button class="iconbtn" id="settingsBtn" aria-label="Settings">Settings</button>
+    </div>
+    <input class="search" id="search" type="search" placeholder="Search name, material, client, code…" autocomplete="off">
+    <div class="tabs" role="tablist" id="tabs"></div>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <div class="reminders" id="reminders"></div>
+  <p class="hint" id="tabHint"></p>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden></div>
+</div>
+<button class="fab" id="addBtn" hidden>+ Add piece</button>
+
+<dialog id="detail"><div class="sheet" id="detailBody"></div></dialog>
+<dialog id="share"><div class="sheet" id="shareBody"></div></dialog>
+<dialog id="editDlg"><form class="sheet" id="editForm" novalidate></form></dialog>
+<dialog id="settingsDlg"><form class="sheet" id="settingsForm" novalidate></form></dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const STAGES = [
+  {id:"stock",   label:"Available",       hint:"Finished pieces ready to sell. Tap one to send a client a photo with its price."},
+  {id:"reserved",label:"Reserved",        hint:"Held for a client but not paid yet."},
+  {id:"making",  label:"In the making",   hint:"Orders on the bench, soonest delivery first."},
+  {id:"idea",    label:"Ideas to propose",hint:"Pieces you could make. Send one as a proposal with its price and making time."},
+  {id:"sold",    label:"Sold",            hint:"Sold pieces, newest first."},
+];
+const KINDS = ["Ring","Necklace","Pendant","Bracelet","Earrings","Brooch","Set","Other"];
+
+let db = null, assets = null, canWrite = false;
+let items = [], settings = {currency:"€", business:"VMT", phone:""};
+let tab = "stock", query = "", showCost = false;
+let openId = null, formPhotos = [];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const blob = id => "/_blob/" + id;
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k, v);}catch(e){ return null; } }
+
+/* ---------- dates & money ---------- */
+const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const iso = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const parse = s => { if(!s) return null; const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + Number(n||0)); return iso(d); };
+const daysUntil = s => Math.round((parse(s) - today()) / 86400000);
+const nice = s => s ? parse(s).toLocaleDateString(undefined, {weekday:"short", day:"numeric", month:"short"}) : "";
+const niceLong = s => s ? parse(s).toLocaleDateString(undefined, {day:"numeric", month:"long", year:"numeric"}) : "";
+function money(n){ if(n === "" || n == null || isNaN(n)) return "—"; const v = Number(n); return settings.currency + v.toLocaleString(undefined, {maximumFractionDigits: v % 1 ? 2 : 0}); }
+function duration(days){
+  days = Number(days)||0; if(!days) return "";
+  if(days % 7 === 0) return days/7 === 1 ? "1 week" : days/7 + " weeks";
+  return days === 1 ? "1 day" : days + " days";
+}
+function dueText(s){
+  const n = daysUntil(s);
+  if(n < 0) return {t: (-n) + (n===-1?" day":" days") + " late", cls:"bad"};
+  if(n === 0) return {t:"Due today", cls:"bad"};
+  if(n === 1) return {t:"Due tomorrow", cls:"warn"};
+  return {t:"Due in " + n + " days", cls: n <= 7 ? "warn" : "ok"};
+}
+const codeOf = it => "VMT-" + String(it.num || 0).padStart(3, "0");
+
+/* ---------- rendering ---------- */
+function filtered(stage){
+  const q = query.trim().toLowerCase();
+  let list = items.filter(i => i.stage === stage);
+  if(q) list = list.filter(i => [i.name,i.kind,i.materials,i.client,i.notes,codeOf(i)].join(" ").toLowerCase().includes(q));
+  const by = {
+    making: (a,b) => (a.dueDate||"9").localeCompare(b.dueDate||"9"),
+    sold:   (a,b) => (b.soldDate||"").localeCompare(a.soldDate||""),
+  }[stage] || ((a,b) => (b.createdAt||0) - (a.createdAt||0));
+  return list.sort(by);
+}
+
+function render(){
+  $("#bizName").textContent = settings.business || "VMT";
+  $("#costToggle").setAttribute("aria-pressed", showCost);
+  $("#costToggle").textContent = showCost ? "Costs shown" : "Costs hidden";
+
+  $("#tabs").innerHTML = STAGES.map(s =>
+    `<button class="tab" role="tab" data-tab="${s.id}" aria-selected="${s.id===tab}">${s.label}<b>${items.filter(i=>i.stage===s.id).length}</b></button>`).join("");
+
+  const due = items.filter(i => i.stage === "making" && i.dueDate && daysUntil(i.dueDate) <= 10)
+                   .sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+  $("#reminders").innerHTML = due.map(i => { const d = dueText(i.dueDate); return `
+    <button class="rem ${d.cls==="bad"?"late":""}" data-open="${i.id}">
+      <span class="when">${esc(d.t)}</span>
+      <span class="what">${esc(i.name || "Untitled")}${i.client ? " for " + esc(i.client) : ""} · ${esc(nice(i.dueDate))}</span>
+    </button>`; }).join("");
+
+  const stage = STAGES.find(s => s.id === tab);
+  $("#tabHint").textContent = stage.hint;
+  const list = filtered(tab);
+  $("#grid").innerHTML = list.map(cardHTML).join("");
+  const empty = $("#empty");
+  empty.hidden = list.length > 0 || !db;
+  if(!list.length){
+    empty.innerHTML = query
+      ? `<h2>Nothing matches “${esc(query)}”</h2><p>Try a material or the piece code, like VMT-012.</p>`
+      : {
+          stock:   `<h2>No pieces in stock yet</h2><p>Tap <b>+ Add piece</b>, take or choose a photo, and enter the cost and sale price. Mark can do this from his phone too.</p>`,
+          reserved:`<h2>Nothing reserved</h2><p>Open an available piece and choose <b>Reserve</b> when a client asks you to hold it.</p>`,
+          making:  `<h2>Nothing on the bench</h2><p>Add an order with its start date and how long it takes. The delivery date is worked out for you, and a reminder shows up here 10 days before.</p>`,
+          idea:    `<h2>No ideas saved</h2><p>Add a design you could make, with a sketch or reference photo, a price and how long it takes. Send it to a client as a proposal.</p>`,
+          sold:    `<h2>No sales recorded</h2><p>Mark a piece as sold from its page and it moves here.</p>`,
+        }[tab];
+  }
+  $("#addBtn").hidden = !canWrite;
+  if(openId && $("#detail").open) renderDetail();
+}
+
+function cardHTML(i){
+  const photo = i.photos?.[0] ? `<img src="${blob(i.photos[0])}" alt="" loading="lazy">` : `<span>No photo</span>`;
+  let chip = "";
+  if(i.stage === "making" && i.dueDate){ const d = dueText(i.dueDate); chip = `<span class="chip ${d.cls}">${esc(d.t)}</span>`; }
+  else if(i.stage === "idea" && i.makeDays) chip = `<span class="chip">${esc(duration(i.makeDays))} to make</span>`;
+  else if(i.stage === "reserved" && i.client) chip = `<span class="chip warn">For ${esc(i.client)}</span>`;
+  return `<button class="card" data-open="${i.id}">
+    <div class="ph">${photo}${chip}</div>
+    <div class="meta">
+      <span class="code">${codeOf(i)}${i.kind ? " · " + esc(i.kind) : ""}</span>
+      <span class="name">${esc(i.name || "Untitled")}</span>
+      <span class="prices"><span class="sale">${money(i.price)}</span>${showCost ? `<span class="cost">cost ${money(i.cost)}</span>` : ""}</span>
+    </div></button>`;
+}
+
+/* ---------- detail sheet ---------- */
+function renderDetail(){
+  const i = items.find(x => x.id === openId);
+  if(!i){ $("#detail").close(); return; }
+  const photos = (i.photos||[]).map(p => `<img src="${blob(p)}" alt="">`).join("");
+  const margin = (i.price!=="" && i.cost!=="" && i.price!=null && i.cost!=null) ? Number(i.price) - Number(i.cost) : null;
+  let timeline = "";
+  if(i.stage === "making" && i.dueDate){
+    const total = Math.max(1, (parse(i.dueDate) - parse(i.startDate || iso(today()))) / 86400000);
+    const done = Math.min(1, Math.max(0, (today() - parse(i.startDate || iso(today()))) / 86400000 / total));
+    const d = dueText(i.dueDate);
+    timeline = `<div class="timeline"><div class="section-label">Delivery</div>
+      <div><b>${esc(niceLong(i.dueDate))}</b> · ${esc(d.t)}</div>
+      <div class="note">Started ${esc(nice(i.startDate))}${i.makeDays ? " · takes " + esc(duration(i.makeDays)) : ""}</div>
+      <div class="bar"><i style="width:${Math.round(done*100)}%"></i></div></div>`;
+  } else if(i.stage === "idea"){
+    timeline = `<div class="timeline"><div class="section-label">If ordered today</div>
+      <div>Takes <b>${esc(duration(i.makeDays) || "—")}</b>${i.makeDays ? ` · ready about <b>${esc(niceLong(addDays(iso(today()), i.makeDays)))}</b>` : ""}</div></div>`;
+  }
+  const actions = [];
+  actions.push(`<button class="btn primary" data-act="share">${i.stage==="idea" ? "Send as proposal" : "Send to client"}</button>`);
+  if(canWrite){
+    if(i.stage === "stock") actions.push(`<button class="btn" data-act="reserve">Reserve</button><button class="btn" data-act="sold">Mark sold</button>`);
+    if(i.stage === "reserved") actions.push(`<button class="btn" data-act="sold">Mark sold</button><button class="btn" data-act="release">Back to available</button>`);
+    if(i.stage === "idea") actions.push(`<button class="btn" data-act="start">Start making</button>`);
+    if(i.stage === "making") actions.push(`<button class="btn" data-act="finished">Finished, in stock</button><button class="btn" data-act="delivered">Delivered &amp; sold</button>`);
+    if(i.stage === "sold") actions.push(`<button class="btn" data-act="release">Back to available</button>`);
+    actions.push(`<button class="btn" data-act="edit">Edit</button>`);
+  }
+  $("#detailBody").innerHTML = `
+    <div><button class="close" data-close aria-label="Close">×</button>
+      <span class="code">${codeOf(i)}${i.kind ? " · " + esc(i.kind) : ""} · ${esc(STAGES.find(s=>s.id===i.stage)?.label)}</span>
+      <h2>${esc(i.name || "Untitled")}</h2></div>
+    ${photos ? `<div class="gallery">${photos}</div>` : ""}
+    ${timeline}
+    <dl class="kv">
+      <dt>Sale price</dt><dd class="money sale">${money(i.price)}</dd>
+      ${showCost ? `<dt>Cost price</dt><dd class="money">${money(i.cost)} <span class="private">private</span></dd>
+      <dt>Margin</dt><dd class="money">${margin==null ? "—" : money(margin) + (Number(i.price) ? ` (${Math.round(margin/Number(i.price)*100)}%)` : "")}</dd>` : ""}
+      ${i.materials ? `<dt>Materials</dt><dd>${esc(i.materials)}</dd>` : ""}
+      ${i.client ? `<dt>${i.stage==="sold"?"Sold to":"Client"}</dt><dd>${esc(i.client)}</dd>` : ""}
+      ${i.soldDate ? `<dt>Sold on</dt><dd>${esc(niceLong(i.soldDate))}</dd>` : ""}
+      ${i.notes ? `<dt>Notes</dt><dd>${esc(i.notes)}</dd>` : ""}
+    </dl>
+    ${!showCost ? `<p class="note">Cost price is hidden. Tap “Costs hidden” at the top to see it on this phone.</p>` : ""}
+    <div id="stageForm"></div>
+    <div class="row">${actions.join("")}</div>`;
+}
+
+function openDetail(id){ openId = id; renderDetail(); if(!$("#detail").open) $("#detail").showModal(); }
+
+/* quick stage changes, with an inline step for the details they need */
+function stageStep(act, i){
+  const box = $("#stageForm");
+  const t = iso(today());
+  if(act === "reserve" || act === "sold" || act === "delivered"){
+    box.innerHTML = `<form class="timeline" id="quick"><label class="note">Client name<br><input id="qClient" value="${esc(i.client||"")}" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)"></label>
+      ${act!=="reserve" ? `<label class="note">Sold on<br><input id="qDate" type="date" value="${t}" style="margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)"></label>` : ""}
+      <div class="row" style="margin-top:10px"><button class="btn primary">${act==="reserve"?"Reserve":"Save sale"}</button><button type="button" class="btn" data-cancel>Cancel</button></div></form>`;
+    $("#quick").onsubmit = e => { e.preventDefault();
+      const patch = {client: $("#qClient").value.trim()};
+      if(act === "reserve") patch.stage = "reserved"; else { patch.stage = "sold"; patch.soldDate = $("#qDate").value || t; }
+      save(i.id, patch, act==="reserve" ? "Reserved" : "Moved to Sold"); };
+  } else if(act === "start"){
+    box.innerHTML = `<form class="timeline" id="quick">
+      <div class="two"><label class="note">Client<br><input id="qClient" value="${esc(i.client||"")}" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)"></label>
+      <label class="note">Start date<br><input id="qDate" type="date" value="${t}" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)"></label></div>
+      <p class="note" id="qDue"></p>
+      <div class="row"><button class="btn primary">Start</button><button type="button" class="btn" data-cancel>Cancel</button></div></form>`;
+    const upd = () => $("#qDue").textContent = i.makeDays ? "Delivery: " + niceLong(addDays($("#qDate").value || t, i.makeDays)) + " (" + duration(i.makeDays) + ")" : "Add a making time with Edit to get a delivery date.";
+    $("#qDate").oninput = upd; upd();
+    $("#quick").onsubmit = e => { e.preventDefault(); const s = $("#qDate").value || t;
+      save(i.id, {stage:"making", client:$("#qClient").value.trim(), startDate:s, dueDate: i.makeDays ? addDays(s, i.makeDays) : ""}, "Moved to In the making"); };
+  }
+  box.querySelector("[data-cancel]").onclick = () => box.innerHTML = "";
+}
+
+/* ---------- share card ---------- */
+function availabilityLine(i){
+  if(i.stage === "stock") return "Available now";
+  if(i.stage === "reserved") return "Reserved";
+  if(i.stage === "making") return i.dueDate ? "Ready " + niceLong(i.dueDate) : "In the making";
+  if(i.stage === "idea") return i.makeDays ? "Made to order · ready in about " + duration(i.makeDays) : "Made to order";
+  return "";
+}
+function captionFor(i){
+  const lines = [i.name, i.materials, money(i.price), availabilityLine(i)].filter(Boolean);
+  return lines.join("\n") + "\n\n" + (settings.business||"VMT") + (i.num ? " · ref " + codeOf(i) : "");
+}
+function loadImg(src){ return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+async function drawCard(i, photoIdx){
+  const W = 1080, H = 1350, P = 1080;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  try{ await Promise.all([document.fonts.load('54px "Marcellus"'), document.fonts.load('500 40px "IBM Plex Mono"'), document.fonts.load('30px "Instrument Sans"')]); }catch(e){}
+  g.fillStyle = "#ece9e2"; g.fillRect(0,0,W,P);
+  const pid = i.photos?.[photoIdx];
+  if(pid){ try{ const im = await loadImg(blob(pid));
+      const s = Math.max(W/im.width, P/im.height), w = im.width*s, h = im.height*s;
+      g.drawImage(im, (W-w)/2, (P-h)/2, w, h); }catch(e){} }
+  else { g.fillStyle = "#8a8578"; g.font = '40px "Marcellus", Georgia, serif'; g.textAlign = "center"; g.fillText("Photo to follow", W/2, P/2); g.textAlign = "left"; }
+  g.fillStyle = "#16201f"; g.fillRect(0, P, W, H-P);
+  g.fillStyle = "#c9a85a"; g.fillRect(64, P+44, 56, 3);
+  const fit = (text, font, max) => { g.font = font; let t = text; while(g.measureText(t).width > max && t.length > 1) t = t.slice(0,-1); return t === text ? t : t.trimEnd() + "…"; };
+  const price = money(i.price);
+  g.font = '500 54px "IBM Plex Mono", Menlo, monospace'; const pw = g.measureText(price).width;
+  g.fillStyle = "#f3efe6"; g.fillText(fit(i.name || "", '56px "Marcellus", Georgia, serif', W - 128 - pw - 40), 64, P+128);
+  g.fillStyle = "#e2c477"; g.font = '500 54px "IBM Plex Mono", Menlo, monospace'; g.textAlign = "right"; g.fillText(price, W-64, P+128); g.textAlign = "left";
+  g.fillStyle = "#b9c2bf"; g.fillText(fit(i.materials || "", '30px "Instrument Sans", system-ui, sans-serif', W-128), 64, P+180);
+  g.fillStyle = "#e2c477"; g.fillText(fit(availabilityLine(i), '500 28px "Instrument Sans", system-ui, sans-serif', W-360), 64, P+232);
+  g.fillStyle = "#7f8b88"; g.font = '24px "IBM Plex Mono", Menlo, monospace'; g.textAlign = "right";
+  g.fillText((settings.business||"VMT").toUpperCase() + (i.num ? " · " + codeOf(i) : ""), W-64, P+232); g.textAlign = "left";
+  return c;
+}
+
+let shareCanvas = null;
+async function openShare(i, idx = 0){
+  const n = (i.photos||[]).length;
+  $("#shareBody").innerHTML = `<div><button class="close" data-close aria-label="Close">×</button>
+      <span class="section-label">For the client</span><h2>${esc(i.name || "Untitled")}</h2></div>
+    <p class="note">Shows the sale price only. Your cost price is never on the picture or the message.</p>
+    <canvas class="preview" id="shareCanvas" width="1080" height="1350" style="aspect-ratio:4/5"></canvas>
+    ${n > 1 ? `<div class="row">${i.photos.map((p,k)=>`<button class="btn" data-photo="${k}" aria-pressed="${k===idx}">Photo ${k+1}</button>`).join("")}</div>` : ""}
+    <div class="row"><button class="btn primary" id="saveImg">Save picture</button><a class="btn" id="waLink" target="_blank" rel="noopener">Open WhatsApp</a></div>
+    <label class="section-label" for="cap">Message</label>
+    <textarea class="caption" id="cap">${esc(captionFor(i))}</textarea>
+    <div class="row"><button class="btn" id="copyCap">Copy message</button></div>
+    <p class="note">1. Save picture. 2. In WhatsApp, open the client’s chat and attach it from your photos. 3. Paste the message. “Open WhatsApp” starts a chat with the message filled in.</p>`;
+  if(!$("#share").open) $("#share").showModal();
+  const setWa = () => $("#waLink").href = "https://wa.me/?text=" + encodeURIComponent($("#cap").value);
+  $("#cap").oninput = setWa; setWa();
+  $("#copyCap").onclick = async () => { const ta = $("#cap");
+    try{ await navigator.clipboard.writeText(ta.value); toast("Message copied"); }
+    catch(e){ ta.focus(); ta.select(); toast("Selected. Copy it from the menu"); } };
+  $("#shareBody").querySelectorAll("[data-photo]").forEach(b => b.onclick = () => openShare(i, Number(b.dataset.photo)));
+  shareCanvas = await drawCard(i, idx);
+  const pc = $("#shareCanvas"); if(pc) pc.getContext("2d").drawImage(shareCanvas, 0, 0);
+  $("#saveImg").onclick = async () => {
+    const dl = await claude.use("downloads");
+    if(!dl){ toast("Saving isn’t available here. Long-press the picture instead"); return; }
+    const b = await new Promise(r => shareCanvas.toBlob(r, "image/jpeg", 0.9));
+    const fname = (codeOf(i) + " " + (i.name||"piece")).replace(/[^\w\- ]+/g,"").trim() + ".jpg";
+    try{ await dl.save({filename: fname, data: b}); toast("Picture saved"); }
+    catch(e){ if(e?.code !== "declined") toast(e?.code === "rate_limited" ? "Wait a moment, then try again" : "Couldn’t save the picture"); }
+  };
+}
+
+/* ---------- add / edit form ---------- */
+function stageFields(stage){
+  const f = $("#editForm");
+  f.querySelectorAll("[data-for]").forEach(el => el.hidden = !el.dataset.for.split(" ").includes(stage));
+}
+function openEdit(i){
+  const isNew = !i;
+  i = i || {stage: tab, kind:"", photos:[], startDate: iso(today())};
+  formPhotos = [...(i.photos||[])];
+  const unit = i.makeDays && i.makeDays % 7 === 0 ? "weeks" : "days";
+  const amount = i.makeDays ? (unit === "weeks" ? i.makeDays/7 : i.makeDays) : "";
+  $("#editForm").innerHTML = `
+    <div><button type="button" class="close" data-close aria-label="Close">×</button><h2>${isNew ? "Add a piece" : "Edit " + esc(codeOf(i))}</h2></div>
+    <div><div class="section-label" style="margin-bottom:6px">Photos</div><div class="thumbs" id="thumbs"></div><p class="note" id="upNote"></p></div>
+    <label>Where is it?<select id="fStage">${STAGES.map(s=>`<option value="${s.id}" ${s.id===i.stage?"selected":""}>${s.label}</option>`).join("")}</select></label>
+    <label>Name<input id="fName" required value="${esc(i.name||"")}" placeholder="Emerald halo ring"></label>
+    <div class="two">
+      <label>Type<select id="fKind"><option value="">—</option>${KINDS.map(k=>`<option ${k===i.kind?"selected":""}>${k}</option>`).join("")}</select></label>
+      <label>Materials<input id="fMat" value="${esc(i.materials||"")}" placeholder="18k gold, 0.4ct emerald"></label>
+    </div>
+    <div class="two">
+      <label>Sale price (${esc(settings.currency)})<input id="fPrice" type="number" inputmode="decimal" min="0" step="any" value="${i.price ?? ""}"></label>
+      <label>Cost price (${esc(settings.currency)}) · private<input id="fCost" type="number" inputmode="decimal" min="0" step="any" value="${i.cost ?? ""}"></label>
+    </div>
+    <div class="two" data-for="making idea">
+      <label>Time to make<input id="fDur" type="number" inputmode="numeric" min="0" step="1" value="${amount}"></label>
+      <label>&nbsp;<select id="fUnit"><option value="days" ${unit==="days"?"selected":""}>days</option><option value="weeks" ${unit==="weeks"?"selected":""}>weeks</option></select></label>
+    </div>
+    <div class="two" data-for="making">
+      <label>Started<input id="fStart" type="date" value="${esc(i.startDate||iso(today()))}"></label>
+      <label>Delivery date<input id="fDue" type="date" value="${esc(i.dueDate||"")}"></label>
+    </div>
+    <p class="note" data-for="making">The delivery date fills in from the start date and time to make. You can change it.</p>
+    <label data-for="making reserved sold idea">Client<input id="fClient" value="${esc(i.client||"")}" placeholder="Name or phone"></label>
+    <label data-for="sold">Sold on<input id="fSold" type="date" value="${esc(i.soldDate||iso(today()))}"></label>
+    <label>Notes<textarea id="fNotes" rows="3" placeholder="Ring size, stone source, client wishes…">${esc(i.notes||"")}</textarea></label>
+    <div class="row" id="formActions">
+      <button class="btn primary" id="fSave">${isNew ? "Add piece" : "Save changes"}</button>
+      ${isNew ? "" : `<button type="button" class="btn danger" id="fDel">Delete</button>`}
+    </div>`;
+  renderThumbs();
+  stageFields(i.stage);
+  const recompute = () => { const n = Number($("#fDur").value) * ($("#fUnit").value === "weeks" ? 7 : 1);
+    if(n && $("#fStart").value) $("#fDue").value = addDays($("#fStart").value, n); };
+  $("#fStage").onchange = e => stageFields(e.target.value);
+  ["#fDur","#fUnit","#fStart"].forEach(s => $(s).addEventListener("input", recompute));
+  $("#editForm").onsubmit = async e => {
+    e.preventDefault();
+    const name = $("#fName").value.trim();
+    if(!name){ $("#fName").focus(); toast("Give the piece a name"); return; }
+    const num = v => v === "" ? "" : Number(v);
+    const stage = $("#fStage").value;
+    const data = {
+      stage, name, kind: $("#fKind").value, materials: $("#fMat").value.trim(),
+      price: num($("#fPrice").value), cost: num($("#fCost").value),
+      makeDays: (Number($("#fDur").value)||0) * ($("#fUnit").value === "weeks" ? 7 : 1),
+      startDate: stage==="making" ? $("#fStart").value : (i.startDate||""),
+      dueDate: stage==="making" ? $("#fDue").value : (i.dueDate||""),
+      client: $("#fClient").value.trim(), soldDate: stage==="sold" ? $("#fSold").value : (i.soldDate||""),
+      notes: $("#fNotes").value.trim(), photos: formPhotos, updatedAt: Date.now(),
+    };
+    $("#fSave").disabled = true;
+    try{
+      if(isNew){
+        data.createdAt = Date.now();
+        data.num = items.reduce((m,x) => Math.max(m, x.num||0), 0) + 1;
+        await db.collection("pieces").doc().set(data);
+        tab = stage; toast("Added " + name);
+      } else {
+        await db.doc("pieces/" + i.id).update(data); toast("Saved");
+      }
+      $("#editDlg").close(); render();
+    }catch(err){ $("#fSave").disabled = false; toast(writeError(err)); }
+  };
+  if(!isNew) $("#fDel").onclick = () => {
+    $("#formActions").innerHTML = `<span class="note" style="flex-basis:100%">Delete ${esc(i.name||"this piece")} for good?</span>
+      <button type="button" class="btn danger" id="fDelYes">Yes, delete</button><button type="button" class="btn" id="fDelNo">Keep it</button>`;
+    $("#fDelNo").onclick = () => openEdit(i);
+    $("#fDelYes").onclick = async () => {
+      try{ await db.doc("pieces/" + i.id).delete();
+        for(const p of i.photos||[]) { try{ await assets?.delete(p); }catch(e){} }
+        $("#editDlg").close(); $("#detail").close(); toast("Deleted"); }
+      catch(err){ toast(writeError(err)); }
+    };
+  };
+  if(!$("#editDlg").open) $("#editDlg").showModal();
+}
+
+function renderThumbs(){
+  $("#thumbs").innerHTML = formPhotos.map((p,k) => `<div class="thumb"><img src="${blob(p)}" alt=""><button type="button" data-rm="${k}" aria-label="Remove photo">×</button></div>`).join("")
+    + (assets ? `<label class="addphoto">+ Photo<input type="file" accept="image/*" multiple id="fFile"></label>` : "");
+  $("#thumbs").querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { formPhotos.splice(Number(b.dataset.rm),1); renderThumbs(); });
+  const fi = $("#fFile"); if(fi) fi.onchange = () => uploadFiles([...fi.files]);
+}
+
+async function shrink(file){
+  try{
+    const url = URL.createObjectURL(file); const im = await loadImg(url); URL.revokeObjectURL(url);
+    const s = Math.min(1, 1600 / Math.max(im.width, im.height));
+    const c = document.createElement("canvas"); c.width = Math.round(im.width*s); c.height = Math.round(im.height*s);
+    c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(r, "image/jpeg", 0.86)) || file;
+  }catch(e){ return file; }
+}
+async function uploadFiles(files){
+  const note = $("#upNote");
+  for(const [k,f] of files.entries()){
+    note.textContent = `Uploading photo ${k+1} of ${files.length}…`;
+    try{ const r = await assets.upload(await shrink(f)); formPhotos.push(r.id); renderThumbs(); }
+    catch(e){ note.textContent = e?.code === "quota_exceeded" ? "Photo storage is full. Delete old sold pieces to make room." : "That photo didn’t upload. Try a JPG or PNG."; return; }
+  }
+  note.textContent = "";
+}
+
+function writeError(e){
+  if(e?.code === "permission_denied") return "You can view this book but not change it. Ask the owner for edit access.";
+  return "Couldn’t save. Check your connection and try again.";
+}
+async function save(id, patch, msg){
+  try{ await db.doc("pieces/" + id).update({...patch, updatedAt: Date.now()}); toast(msg); }
+  catch(e){ toast(writeError(e)); }
+}
+
+/* ---------- settings ---------- */
+function openSettings(){
+  $("#settingsForm").innerHTML = `<div><button type="button" class="close" data-close aria-label="Close">×</button><h2>Settings</h2></div>
+    <label>Business name on the pictures<input id="sBiz" value="${esc(settings.business||"VMT")}"></label>
+    <label>Currency symbol<input id="sCur" value="${esc(settings.currency||"€")}" maxlength="4"></label>
+    <p class="note">These apply for everyone who uses this book.</p>
+    <div class="row"><button class="btn primary" ${canWrite?"":"disabled"}>Save</button></div>`;
+  $("#settingsForm").onsubmit = async e => { e.preventDefault();
+    try{ await db.doc("settings/main").set({business: $("#sBiz").value.trim() || "VMT", currency: $("#sCur").value.trim() || "€"});
+      $("#settingsDlg").close(); toast("Settings saved"); }catch(err){ toast(writeError(err)); } };
+  $("#settingsDlg").showModal();
+}
+
+/* ---------- misc ---------- */
+let tt; function toast(m){ const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2600); }
+
+document.addEventListener("click", e => {
+  const tb = e.target.closest("[data-tab]"); if(tb){ tab = tb.dataset.tab; store("vmt.tab", tab); render(); return; }
+  const op = e.target.closest("[data-open]"); if(op){ openDetail(op.dataset.open); return; }
+  const cl = e.target.closest("[data-close]"); if(cl){ cl.closest("dialog").close(); return; }
+  const ac = e.target.closest("[data-act]");
+  if(ac){ const i = items.find(x => x.id === openId); if(!i) return;
+    const a = ac.dataset.act;
+    if(a === "share") openShare(i);
+    else if(a === "edit") openEdit(i);
+    else if(a === "release") save(i.id, {stage:"stock"}, "Back in Available");
+    else if(a === "finished") save(i.id, {stage:"stock"}, "Moved to Available");
+    else stageStep(a, i);
+  }
+});
+document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if(e.target === d) d.close(); }));
+$("#detail").addEventListener("close", () => openId = null);
+$("#search").addEventListener("input", e => { query = e.target.value; render(); });
+$("#costToggle").onclick = () => { showCost = !showCost; store("vmt.cost", showCost ? "1" : "0"); render(); };
+$("#settingsBtn").onclick = openSettings;
+$("#addBtn").onclick = () => openEdit(null);
+
+tab = STAGES.some(s => s.id === store("vmt.tab")) ? store("vmt.tab") : "stock";
+showCost = store("vmt.cost") === "1";
+render();
+
+(async () => {
+  db = await claude.use("db");
+  if(!db){ const b = $("#banner"); b.hidden = false; b.textContent = "Sign in to Claude to open the jewellery book."; render(); return; }
+  assets = await claude.use("assets");
+  canWrite = !!assets;
+  db.collection("pieces").onSnapshot(s => { items = s.docs.map(d => ({id: d.id, ...d.data()})); render(); },
+    () => { const b = $("#banner"); b.hidden = false; b.textContent = "The inventory didn’t load. Check your connection and reopen the page."; });
+  db.doc("settings/main").onSnapshot(s => { if(s.exists) settings = {...settings, ...s.data()}; render(); });
+  render();
+})();
+</script>
