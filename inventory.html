@@ -167,11 +167,11 @@ const KINDS = ["Ring","Necklace","Pendant","Bracelet","Earrings","Brooch","Set",
 let db = null, assets = null, canWrite = false;
 let items = [], settings = {currency:"€", business:"VMT", phone:""};
 let tab = "stock", query = "", showCost = false;
-let openId = null, formPhotos = [], formDesign = null;
+let openId = null, formPhotos = [], formDesign = null, formMats = [];
 let parts = [];
-const PARTS_TAB = {id:"parts", label:"Raw materials", hint:"Charms, bases, stones and other materials you build new designs from. Photograph each one on plain white paper so the background can be removed."};
-const MAT_TYPES = [["base","Base","BS"],["charm","Charm","CH"],["stone","Stone","ST"],["other","Other","MT"]];
-const matType = p => MAT_TYPES.find(t => t[0] === p.type) || MAT_TYPES[1];
+const PARTS_TAB = {id:"parts", label:"Raw materials", hint:"Wood, stones, charms, beads and clasps you already own. Their prices add up to the quote for each piece you make with them. Photograph each one on plain white paper so the background can be removed."};
+const MAT_TYPES = [["wood","Wood","WD"],["stone","Stone","ST"],["charm","Charm","CH"],["bead","Bead","BD"],["clasp","Clasp","CL"],["other","Other","MT"]];
+const matType = p => MAT_TYPES.find(t => t[0] === (p.type === "base" ? "wood" : p.type)) || MAT_TYPES[5];
 const partCode = p => matType(p)[2] + "-" + String(p.num || 0).padStart(3, "0");
 
 const $ = s => document.querySelector(s);
@@ -245,7 +245,7 @@ function render(){
           stock:   `<h2>No pieces in stock yet</h2><p>Tap <b>+ Add piece</b>, take or choose a photo, and enter the cost and sale price. Mark can do this from his phone too.</p>`,
           reserved:`<h2>Nothing reserved</h2><p>Open an available piece and choose <b>Reserve</b> when a client asks you to hold it.</p>`,
           making:  `<h2>Nothing on the bench</h2><p>Add an order with its start date and how long it takes. The delivery date is worked out for you, and a reminder shows up here 10 days before.</p>`,
-          idea:    `<h2>No ideas saved</h2><p>Add a design you could make. Build its picture from your raw materials with <b>Design it with charms</b>, or add a sketch. Set a price and how long it takes. Send it to a client as a proposal.</p>`,
+          idea:    `<h2>No ideas saved</h2><p>Add a design you could make. Pick the raw materials it needs and the price adds itself up. You can also make a picture from them to send the client. Send it to a client as a proposal.</p>`,
           sold:    `<h2>No sales recorded</h2><p>Mark a piece as sold from its page and it moves here.</p>`,
           parts:   `<h2>No raw materials yet</h2><p>Tap <b>+ Add material</b> to add a charm, base, stone or anything else, and photograph it on plain white paper. The background is removed so it can be placed on a base when you design a new piece.</p>`,
         }[tab];
@@ -266,15 +266,17 @@ function partCardHTML(p){
     <div class="meta"><span class="code">${partCode(p)}</span><span class="name">${esc(p.name || "Untitled")}</span>
       <span class="prices"><span class="sale">${money(p.price)}</span>${showCost ? `<span class="cost">cost ${money(p.cost)}</span>` : ""}</span></div></button>`;
 }
-function designSummary(d){
-  if(!d?.layers?.length) return "";
-  const counts = new Map();
-  d.layers.forEach(l => { const p = parts.find(x => x.id === l.part); const n = p?.name || "Removed part"; counts.set(n, (counts.get(n)||0) + 1); });
-  return [...counts].map(([n,c]) => (c > 1 ? c + " × " : "") + n).join(", ");
+function layersToMats(layers){
+  const m = new Map(); (layers||[]).forEach(l => m.set(l.part, (m.get(l.part)||0) + 1));
+  return [...m].map(([part, qty]) => ({part, qty}));
 }
-function designTotals(d){
+function matsOf(i){ return i.mats?.length ? i.mats : layersToMats(i.design?.layers); }
+function matsSummary(mats){
+  return (mats||[]).map(m => { const p = parts.find(x => x.id === m.part); return (m.qty > 1 ? m.qty + " × " : "") + (p?.name || "Removed material"); }).join(", ");
+}
+function matsTotals(mats){
   let cost = 0, price = 0;
-  (d?.layers||[]).forEach(l => { const p = parts.find(x => x.id === l.part); if(p){ cost += Number(p.cost)||0; price += Number(p.price)||0; } });
+  (mats||[]).forEach(m => { const p = parts.find(x => x.id === m.part); if(p){ cost += (Number(p.cost)||0) * m.qty; price += (Number(p.price)||0) * m.qty; } });
   return {cost, price};
 }
 
@@ -335,7 +337,8 @@ function renderDetail(){
       ${i.materials ? `<dt>Materials</dt><dd>${esc(i.materials)}</dd>` : ""}
       ${i.client ? `<dt>${i.stage==="sold"?"Sold to":"Client"}</dt><dd>${esc(i.client)}</dd>` : ""}
       ${i.soldDate ? `<dt>Sold on</dt><dd>${esc(niceLong(i.soldDate))}</dd>` : ""}
-      ${i.design?.layers?.length ? `<dt>Made from</dt><dd>${esc(designSummary(i.design))}</dd>` : ""}
+      ${matsOf(i).length ? `<dt>Made from</dt><dd>${esc(matsSummary(matsOf(i)))}</dd>` : ""}
+      ${i.labour ? `<dt>Your work</dt><dd class="money">${money(i.labour)}</dd>` : ""}
       ${i.notes ? `<dt>Notes</dt><dd>${esc(i.notes)}</dd>` : ""}
     </dl>
     ${!showCost ? `<p class="note">Cost price is hidden. Tap “Costs hidden” at the top to see it on this phone.</p>` : ""}
@@ -453,18 +456,25 @@ function openEdit(i){
   i = i || {stage: tab, kind:"", photos:[], startDate: iso(today())};
   formPhotos = [...(i.photos||[])];
   formDesign = i.design ? JSON.parse(JSON.stringify(i.design)) : null;
+  formMats = JSON.parse(JSON.stringify(matsOf(i)));
   const unit = i.makeDays && i.makeDays % 7 === 0 ? "weeks" : "days";
   const amount = i.makeDays ? (unit === "weeks" ? i.makeDays/7 : i.makeDays) : "";
   $("#editForm").innerHTML = `
     <div><button type="button" class="close" data-close aria-label="Close">×</button><h2>${isNew ? "Add a piece" : "Edit " + esc(codeOf(i))}</h2></div>
     <div><div class="section-label" style="margin-bottom:6px">Photos</div><div class="thumbs" id="thumbs"></div><p class="note" id="upNote"></p>
-      ${assets ? `<div class="row" style="margin-top:8px"><button type="button" class="btn" id="fDesign"></button></div>` : ""}
-      <div class="totals" id="designNote" hidden></div></div>
+      ${assets ? `<div class="row" style="margin-top:8px"><button type="button" class="btn" id="fDesign"></button></div>` : ""}</div>
     <label>Where is it?<select id="fStage">${STAGES.map(s=>`<option value="${s.id}" ${s.id===i.stage?"selected":""}>${s.label}</option>`).join("")}</select></label>
     <label>Name<input id="fName" required value="${esc(i.name||"")}" placeholder="Emerald halo ring"></label>
     <div class="two">
       <label>Type<select id="fKind"><option value="">—</option>${KINDS.map(k=>`<option ${k===i.kind?"selected":""}>${k}</option>`).join("")}</select></label>
-      <label>Materials<input id="fMat" value="${esc(i.materials||"")}" placeholder="18k gold, 0.4ct emerald"></label>
+      <label>Description for the client<input id="fMat" value="${esc(i.materials||"")}" placeholder="Olive wood, dendritic agate"></label>
+    </div>
+    <div class="totals" style="display:grid;gap:10px">
+      <div class="section-label">Materials used</div>
+      <div id="matRows" style="display:grid;gap:6px"></div>
+      <select id="matAdd" style="background:var(--surface)"></select>
+      <label>Your work (${esc(settings.currency)})<input id="fLabour" type="number" inputmode="decimal" min="0" step="any" value="${i.labour ?? ""}" style="background:var(--surface)"></label>
+      <div class="money" id="matTotal"></div>
     </div>
     <div class="two">
       <label>Sale price (${esc(settings.currency)})<input id="fPrice" type="number" inputmode="decimal" min="0" step="any" value="${i.price ?? ""}"></label>
@@ -488,13 +498,17 @@ function openEdit(i){
     </div>`;
   renderThumbs();
   renderDesignNote();
+  renderMats(false);
   stageFields(i.stage);
+  $("#matAdd").onchange = e => { const id = e.target.value; if(!id) return;
+    const m = formMats.find(x => x.part === id); if(m) m.qty++; else formMats.push({part:id, qty:1}); renderMats(true); };
+  $("#fLabour").oninput = () => renderMats(true);
   if($("#fDesign")) $("#fDesign").onclick = () => openComposer(formDesign, (design, photoId) => {
     if(formDesign?.photo) formPhotos = formPhotos.filter(p => p !== formDesign.photo);
     formPhotos.unshift(photoId);
     formDesign = {...design, photo: photoId};
-    if(!$("#fMat").value.trim()) $("#fMat").value = designSummary(formDesign);
-    renderThumbs(); renderDesignNote();
+    layersToMats(design.layers).forEach(d => { const m = formMats.find(x => x.part === d.part); if(m) m.qty = Math.max(m.qty, d.qty); else formMats.push(d); });
+    renderThumbs(); renderDesignNote(); renderMats(true);
   });
   const recompute = () => { const n = Number($("#fDur").value) * ($("#fUnit").value === "weeks" ? 7 : 1);
     if(n && $("#fStart").value) $("#fDue").value = addDays($("#fStart").value, n); };
@@ -513,7 +527,7 @@ function openEdit(i){
       startDate: stage==="making" ? $("#fStart").value : (i.startDate||""),
       dueDate: stage==="making" ? $("#fDue").value : (i.dueDate||""),
       client: $("#fClient").value.trim(), soldDate: stage==="sold" ? $("#fSold").value : (i.soldDate||""),
-      notes: $("#fNotes").value.trim(), photos: formPhotos, design: formDesign, updatedAt: Date.now(),
+      notes: $("#fNotes").value.trim(), photos: formPhotos, design: formDesign, mats: formMats, labour: num($("#fLabour").value), updatedAt: Date.now(),
     };
     $("#fSave").disabled = true;
     try{
@@ -543,16 +557,29 @@ function openEdit(i){
 }
 
 function renderDesignNote(){
-  const b = $("#fDesign"); if(b) b.textContent = formDesign ? "Change the design" : "Design it with charms";
-  const n = $("#designNote"); if(!n) return;
-  if(!formDesign?.layers?.length){ n.hidden = true; return; }
-  const t = designTotals(formDesign);
-  n.hidden = false;
-  n.innerHTML = `<div><b>Made from:</b> ${esc(designSummary(formDesign))}</div>
-    <div class="money" style="margin:4px 0 8px">Parts add up to ${money(t.price)} sale · ${money(t.cost)} cost</div>
-    <button type="button" class="btn sm" id="useTotals">Use these prices</button>
-    <span class="note">Add your labour on top if you like.</span>`;
-  $("#useTotals").onclick = () => { $("#fPrice").value = t.price || ""; $("#fCost").value = t.cost || ""; toast("Prices filled in"); };
+  const b = $("#fDesign"); if(b) b.textContent = formDesign ? "Change the design picture" : "Make a picture from the materials";
+}
+
+function renderMats(apply){
+  $("#matRows").innerHTML = formMats.length ? formMats.map((m,k) => { const p = parts.find(x => x.id === m.part);
+    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 64px auto 28px;gap:8px;align-items:center">
+      <span style="min-width:0;overflow-wrap:anywhere">${esc(p?.name || "Removed material")} <span class="note">${p ? matType(p)[1] : ""}</span></span>
+      <input type="number" min="1" step="1" inputmode="numeric" value="${m.qty}" data-mq="${k}" aria-label="How many" style="background:var(--surface);padding:6px">
+      <span class="money">${money((Number(p?.price)||0) * m.qty)}</span>
+      <button type="button" class="close" style="width:28px;height:28px;font-size:15px" data-mrm="${k}" aria-label="Remove">×</button></div>`; }).join("")
+    : `<span class="note">${parts.length ? "Pick the wood, stones, charms and beads that go into this piece." : "Add your wood, stones, charms and beads under Raw materials first."}</span>`;
+  $("#matAdd").innerHTML = `<option value="">+ Add a material…</option>` + MAT_TYPES.map(t => {
+    const ps = parts.filter(p => matType(p)[0] === t[0]).sort((a,b) => (a.name||"").localeCompare(b.name||""));
+    return ps.length ? `<optgroup label="${t[1]}">${ps.map(p => `<option value="${p.id}">${esc(p.name)} · ${money(p.price)}</option>`).join("")}</optgroup>` : ""; }).join("");
+  $("#matRows").querySelectorAll("[data-mq]").forEach(el => el.oninput = () => { formMats[Number(el.dataset.mq)].qty = Math.max(1, Number(el.value)||1); renderMats(true); });
+  $("#matRows").querySelectorAll("[data-mrm]").forEach(el => el.onclick = () => { formMats.splice(Number(el.dataset.mrm), 1); renderMats(true); });
+  const t = matsTotals(formMats), work = Number($("#fLabour").value)||0, quote = t.price + work;
+  $("#matTotal").innerHTML = formMats.length || work
+    ? `Materials ${money(t.price)} + work ${money(work)} = <b class="sale">${money(quote)}</b> to quote${showCost ? `<div class="note">Your cost for the materials: ${money(t.cost)}</div>` : ""}` : "";
+  if(apply && (formMats.length || work)){
+    $("#fPrice").value = quote || ""; $("#fCost").value = t.cost || "";
+    if(formMats.length) $("#fMat").value = formMats.map(m => parts.find(x => x.id === m.part)?.name).filter(Boolean).join(", ");
+  }
 }
 
 function renderThumbs(){
@@ -726,7 +753,7 @@ function paintComp(g, showSel){
   g.fillStyle = comp.bg; g.fillRect(0, 0, 1080, 1080);
   comp.layers.forEach((l, k) => {
     const {im, w, h} = layerBox(l); if(!im) return;
-    const isBase = parts.find(x => x.id === l.part)?.type === "base";
+    const isBase = matType(parts.find(x => x.id === l.part) || {})[0] === "wood";
     g.save(); g.translate(l.x, l.y); g.rotate(l.r * Math.PI/180); g.scale(l.flip ? -1 : 1, 1);
     g.shadowColor = "rgba(0,0,0,.22)"; g.shadowBlur = isBase ? 30 : 14; g.shadowOffsetY = isBase ? 10 : 6;
     g.drawImage(im, -w/2, -h/2, w, h);
@@ -750,29 +777,29 @@ function hitLayer(x, y){
 
 function addLayer(id){
   const p = parts.find(x => x.id === id); if(!p) return;
-  if(p.type === "base"){ comp.layers.unshift({part:id, x:540, y:540, s:860, r:0, flip:false}); compSel = 0; }
+  if(matType(p)[0] === "wood"){ comp.layers.unshift({part:id, x:540, y:540, s:860, r:0, flip:false}); compSel = 0; }
   else { const j = () => (Math.random() - .5) * 160;
-    comp.layers.push({part:id, x:540 + j(), y:540 + j(), s: p.type === "stone" ? 150 : 200, r:0, flip:false}); compSel = comp.layers.length - 1; }
+    comp.layers.push({part:id, x:540 + j(), y:540 + j(), s: matType(p)[0] === "bead" ? 90 : matType(p)[0] === "stone" ? 160 : 200, r:0, flip:false}); compSel = comp.layers.length - 1; }
   drawComp();
 }
 
 function renderCompSide(){
   const side = $("#compSide"); if(!side) return;
   const l = comp.layers[compSel];
-  const t = designTotals(comp);
+  const cm = layersToMats(comp.layers), t = matsTotals(cm);
   $("#compSel").innerHTML = l ? `
     <div class="section-label">Selected: ${esc(parts.find(x=>x.id===l.part)?.name || "")}</div>
     <label class="ctl">Size<input type="range" id="cSize" min="40" max="1400" value="${Math.round(l.s)}"></label>
     <label class="ctl">Turn<input type="range" id="cRot" min="-180" max="180" value="${Math.round(l.r)}"></label>
     <div class="row"><button type="button" class="btn sm" data-c="up">Bring forward</button><button type="button" class="btn sm" data-c="down">Send back</button>
       <button type="button" class="btn sm" data-c="dup">Copy</button><button type="button" class="btn sm" data-c="flip">Mirror</button><button type="button" class="btn sm danger" data-c="del">Remove</button></div>`
-    : `<p class="note">Tap a base, charm or stone below to add it. Drag to move it. On a phone, pinch with two fingers to resize and turn it.</p>`;
+    : `<p class="note">Tap the wood, then stones, charms or beads below to add them. Drag to move it. On a phone, pinch with two fingers to resize and turn it.</p>`;
   if(l){
     $("#cSize").oninput = e => { l.s = Number(e.target.value); drawCompOnly(); };
     $("#cRot").oninput = e => { l.r = Number(e.target.value); drawCompOnly(); };
   }
   $("#compTotals").innerHTML = comp.layers.length
-    ? `${esc(designSummary(comp))}<div class="money" style="margin-top:4px">Parts: ${money(t.price)} sale${showCost ? " · " + money(t.cost) + " cost" : ""}</div>` : "Nothing placed yet.";
+    ? `${esc(matsSummary(cm))}<div class="money" style="margin-top:4px">Materials: ${money(t.price)}${showCost ? " · " + money(t.cost) + " cost" : ""}</div>` : "Nothing placed yet.";
 }
 function drawCompOnly(){ const c = $("#compCanvas"); if(c) paintComp(c.getContext("2d"), true); }
 
