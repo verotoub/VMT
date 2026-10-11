@@ -167,9 +167,9 @@ const KINDS = ["Ring","Necklace","Pendant","Bracelet","Earrings","Brooch","Set",
 let db = null, assets = null, canWrite = false;
 let items = [], settings = {currency:"€", business:"VMT", phone:""};
 let tab = "stock", query = "", showCost = false;
-let openId = null, formPhotos = [], formDesign = null, formMats = [];
+let openId = null, formPhotos = [], formDesign = null, formMats = [], formId = null;
 let parts = [];
-const PARTS_TAB = {id:"parts", label:"Raw materials", hint:"Wood, stones, charms, beads and clasps you already own. Their prices add up to the quote for each piece you make with them. Photograph each one on plain white paper so the background can be removed."};
+const PARTS_TAB = {id:"parts", label:"Raw materials", hint:"Wood, stones, charms, beads and clasps you already own. Their prices add up to the quote for each piece you make with them. Stock goes down by itself when a piece using them is being made or finished. Photograph each one on plain white paper so the background can be removed."};
 const MAT_TYPES = [["wood","Wood","WD"],["stone","Stone","ST"],["charm","Charm","CH"],["bead","Bead","BD"],["clasp","Clasp","CL"],["other","Other","MT"]];
 const matType = p => MAT_TYPES.find(t => t[0] === (p.type === "base" ? "wood" : p.type)) || MAT_TYPES[5];
 const partCode = p => matType(p)[2] + "-" + String(p.num || 0).padStart(3, "0");
@@ -262,7 +262,7 @@ function filteredParts(){
 function partCardHTML(p){
   return `<button class="card" data-part="${p.id}">
     <div class="ph checker">${p.photo ? `<img src="${blob(p.photo)}" alt="" loading="lazy">` : "<span>No photo</span>"}
-      <span class="chip">${matType(p)[1]}${p.qty !== "" && p.qty != null ? " · " + esc(p.qty) + " in stock" : ""}</span></div>
+      ${(() => { const l = leftOf(p); return `<span class="chip ${l == null ? "" : l <= 0 ? "bad" : l <= 2 ? "warn" : ""}">${matType(p)[1]}${l == null ? "" : l <= 0 ? " · none left" : " · " + l + " in stock"}</span>`; })()}</div>
     <div class="meta"><span class="code">${partCode(p)}</span><span class="name">${esc(p.name || "Untitled")}</span>
       <span class="prices"><span class="sale">${money(p.price)}</span>${showCost ? `<span class="cost">cost ${money(p.cost)}</span>` : ""}</span></div></button>`;
 }
@@ -274,6 +274,26 @@ function matsOf(i){ return i.mats?.length ? i.mats : layersToMats(i.design?.laye
 function matsSummary(mats){
   return (mats||[]).map(m => { const p = parts.find(x => x.id === m.part); return (m.qty > 1 ? m.qty + " × " : "") + (p?.name || "Removed material"); }).join(", ");
 }
+/* Stock is worked out, never counted down: what was bought minus what pieces use.
+   Ideas use nothing; a piece takes its materials once it is being made, in stock, reserved or sold. */
+const USES_STOCK = ["making","stock","reserved","sold"];
+function usedOf(partId, exceptId){
+  let n = 0;
+  items.forEach(i => { if(i.id !== exceptId && USES_STOCK.includes(i.stage)) matsOf(i).forEach(m => { if(m.part === partId) n += Number(m.qty)||0; }); });
+  return n;
+}
+function leftOf(p, exceptId){
+  if(p.bought === "" || (p.bought == null && (p.qty === "" || p.qty == null))) return null;
+  const used = usedOf(p.id);
+  const bought = p.bought != null ? Number(p.bought) : Number(p.qty) + used;
+  return bought - used + (exceptId ? used - usedOf(p.id, exceptId) : 0);
+}
+function shortages(mats, exceptId){
+  return (mats||[]).map(m => { const p = parts.find(x => x.id === m.part); const left = p ? leftOf(p, exceptId) : null;
+    return left != null && m.qty > left ? {p, need: m.qty, left: Math.max(0, left)} : null; }).filter(Boolean);
+}
+const shortText = s => s.map(x => `${x.left ? "only " + x.left : "no"} ${x.p.name} left, needs ${x.need}`).join("; ");
+
 function matsTotals(mats){
   let cost = 0, price = 0;
   (mats||[]).forEach(m => { const p = parts.find(x => x.id === m.part); if(p){ cost += (Number(p.cost)||0) * m.qty; price += (Number(p.price)||0) * m.qty; } });
@@ -284,6 +304,7 @@ function cardHTML(i){
   const photo = i.photos?.[0] ? `<img src="${blob(i.photos[0])}" alt="" loading="lazy">` : `<span>No photo</span>`;
   let chip = "";
   if(i.stage === "making" && i.dueDate){ const d = dueText(i.dueDate); chip = `<span class="chip ${d.cls}">${esc(d.t)}</span>`; }
+  else if(i.stage === "idea" && shortages(matsOf(i)).length) chip = `<span class="chip bad">Short of materials</span>`;
   else if(i.stage === "idea" && i.makeDays) chip = `<span class="chip">${esc(duration(i.makeDays))} to make</span>`;
   else if(i.stage === "reserved" && i.client) chip = `<span class="chip warn">For ${esc(i.client)}</span>`;
   return `<button class="card" data-open="${i.id}">
@@ -330,6 +351,8 @@ function renderDetail(){
       <h2>${esc(i.name || "Untitled")}</h2></div>
     ${photos ? `<div class="gallery">${photos}</div>` : ""}
     ${timeline}
+    ${(() => { if(!["idea","making"].includes(i.stage)) return ""; const s = shortages(matsOf(i), i.id);
+      return s.length ? `<div class="rem late" style="display:block"><b>Not enough in stock:</b> ${esc(shortText(s))}</div>` : ""; })()}
     <dl class="kv">
       <dt>Sale price</dt><dd class="money sale">${money(i.price)}</dd>
       ${showCost ? `<dt>Cost price</dt><dd class="money">${money(i.cost)} <span class="private">private</span></dd>
@@ -365,6 +388,7 @@ function stageStep(act, i){
       <div class="two"><label class="note">Client<br><input id="qClient" value="${esc(i.client||"")}" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)"></label>
       <label class="note">Start date<br><input id="qDate" type="date" value="${t}" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)"></label></div>
       <p class="note" id="qDue"></p>
+      ${(() => { const s = shortages(matsOf(i), i.id); return s.length ? `<p class="note" style="color:var(--bad)">Not enough in stock: ${esc(shortText(s))}. You can still start.</p>` : `<p class="note">Its materials come off your raw materials stock.</p>`; })()}
       <div class="row"><button class="btn primary">Start</button><button type="button" class="btn" data-cancel>Cancel</button></div></form>`;
     const upd = () => $("#qDue").textContent = i.makeDays ? "Delivery: " + niceLong(addDays($("#qDate").value || t, i.makeDays)) + " (" + duration(i.makeDays) + ")" : "Add a making time with Edit to get a delivery date.";
     $("#qDate").oninput = upd; upd();
@@ -457,6 +481,7 @@ function openEdit(i){
   formPhotos = [...(i.photos||[])];
   formDesign = i.design ? JSON.parse(JSON.stringify(i.design)) : null;
   formMats = JSON.parse(JSON.stringify(matsOf(i)));
+  formId = i.id || null;
   const unit = i.makeDays && i.makeDays % 7 === 0 ? "weeks" : "days";
   const amount = i.makeDays ? (unit === "weeks" ? i.makeDays/7 : i.makeDays) : "";
   $("#editForm").innerHTML = `
@@ -473,6 +498,7 @@ function openEdit(i){
       <div class="section-label">Materials used</div>
       <div id="matRows" style="display:grid;gap:6px"></div>
       <select id="matAdd" style="background:var(--surface)"></select>
+      <p class="note" style="margin:0">Ideas don’t use stock. Materials come off stock once the piece is being made, in stock, reserved or sold, and go back if it returns to an idea or is deleted.</p>
       <label>Your work (${esc(settings.currency)})<input id="fLabour" type="number" inputmode="decimal" min="0" step="any" value="${i.labour ?? ""}" style="background:var(--surface)"></label>
       <div class="money" id="matTotal"></div>
     </div>
@@ -563,14 +589,15 @@ function renderDesignNote(){
 function renderMats(apply){
   $("#matRows").innerHTML = formMats.length ? formMats.map((m,k) => { const p = parts.find(x => x.id === m.part);
     return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 64px auto 28px;gap:8px;align-items:center">
-      <span style="min-width:0;overflow-wrap:anywhere">${esc(p?.name || "Removed material")} <span class="note">${p ? matType(p)[1] : ""}</span></span>
+      <span style="min-width:0;overflow-wrap:anywhere">${esc(p?.name || "Removed material")} <span class="note">${p ? matType(p)[1] : ""}</span>${(() => { const l = p ? leftOf(p, formId) : null;
+        return l == null ? "" : `<span class="note" style="display:block;${m.qty > l ? "color:var(--bad)" : ""}">${m.qty > l ? (l > 0 ? "Only " + l + " in stock" : "None in stock") : l + " in stock"}</span>`; })()}</span>
       <input type="number" min="1" step="1" inputmode="numeric" value="${m.qty}" data-mq="${k}" aria-label="How many" style="background:var(--surface);padding:6px">
       <span class="money">${money((Number(p?.price)||0) * m.qty)}</span>
       <button type="button" class="close" style="width:28px;height:28px;font-size:15px" data-mrm="${k}" aria-label="Remove">×</button></div>`; }).join("")
     : `<span class="note">${parts.length ? "Pick the wood, stones, charms and beads that go into this piece." : "Add your wood, stones, charms and beads under Raw materials first."}</span>`;
   $("#matAdd").innerHTML = `<option value="">+ Add a material…</option>` + MAT_TYPES.map(t => {
     const ps = parts.filter(p => matType(p)[0] === t[0]).sort((a,b) => (a.name||"").localeCompare(b.name||""));
-    return ps.length ? `<optgroup label="${t[1]}">${ps.map(p => `<option value="${p.id}">${esc(p.name)} · ${money(p.price)}</option>`).join("")}</optgroup>` : ""; }).join("");
+    return ps.length ? `<optgroup label="${t[1]}">${ps.map(p => `<option value="${p.id}">${esc(p.name)} · ${money(p.price)}${(() => { const l = leftOf(p, formId); return l == null ? "" : " · " + Math.max(0, l) + " left"; })()}</option>`).join("")}</optgroup>` : ""; }).join("");
   $("#matRows").querySelectorAll("[data-mq]").forEach(el => el.oninput = () => { formMats[Number(el.dataset.mq)].qty = Math.max(1, Number(el.value)||1); renderMats(true); });
   $("#matRows").querySelectorAll("[data-mrm]").forEach(el => el.onclick = () => { formMats.splice(Number(el.dataset.mrm), 1); renderMats(true); });
   const t = matsTotals(formMats), work = Number($("#fLabour").value)||0, quote = t.price + work;
@@ -681,9 +708,10 @@ function openPartEdit(p){
       <label>Cost (${esc(settings.currency)}) · private<input id="pCost" type="number" inputmode="decimal" min="0" step="any" value="${p.cost ?? ""}"></label>
     </div>
     <div class="two">
-      <label>In stock<input id="pQty" type="number" inputmode="numeric" min="0" step="1" value="${p.qty ?? ""}"></label>
+      <label>In stock now<input id="pQty" type="number" inputmode="numeric" min="0" step="1" value="${isNew || leftOf(p) == null ? "" : Math.max(0, leftOf(p))}" placeholder="Leave empty to not count"></label>
       <label>Notes<input id="pNotes" value="${esc(p.notes||"")}" placeholder="Supplier, size"></label>
     </div>
+    ${!isNew && usedOf(p.id) ? `<p class="note">${usedOf(p.id)} already used in pieces being made, in stock, reserved or sold. When you buy more, add them to “In stock now”.</p>` : ""}
     <div class="row" id="pActions">
       <button class="btn primary" id="pSave" ${canWrite?"":"disabled"}>${isNew ? "Add" : "Save changes"}</button>
       ${isNew || !canWrite ? "" : `<button type="button" class="btn danger" id="pDel">Delete</button>`}
@@ -708,7 +736,7 @@ function openPartEdit(p){
     const num = v => v === "" ? "" : Number(v);
     const data = {
       type: $("#pType").value, name,
-      price: num($("#pPrice").value), cost: num($("#pCost").value), qty: num($("#pQty").value), notes: $("#pNotes").value.trim(),
+      price: num($("#pPrice").value), cost: num($("#pCost").value), qty: num($("#pQty").value), bought: $("#pQty").value === "" ? "" : Number($("#pQty").value) + (isNew ? 0 : usedOf(p.id)), notes: $("#pNotes").value.trim(),
       removeBg: $("#pRemove").checked, tol: Number($("#pTol").value), round: $("#pRound").checked, updatedAt: Date.now(),
     };
     $("#pSave").disabled = true;
